@@ -15,11 +15,17 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push',
            '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-dev:${SHORT_SHA}']
+           
+- name: 'gcr.io/cloud-builders/gcloud'
+  args:
+    - run
+    - deploy
+    - hello-world-dev
+    - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-dev:${SHORT_SHA}
+    - --region=${_REGION}
+    - --platform=managed
+    - --allow-unauthenticated
 
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    args: ['run','deploy','hello-world-dev',
-           '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-dev:${SHORT_SHA}',
-           '--region=${_REGION}','--platform=managed','--allow-unauthenticated']
 
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-dev:${SHORT_SHA}'
