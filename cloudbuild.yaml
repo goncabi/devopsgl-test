@@ -1,14 +1,14 @@
 substitutions:
-  _REGION: "europe-west1"
-  _AR_REPO: "hello-repo"
-  _SERVICE_NAME: "OVERRIDE_IN_TRIGGER"  # each trigger defines it
+  _REGION: "europe-west1"         
+  _AR_REPO: "hello-repo"          
+  _SERVICE_NAME: "OVERRIDE_IN_TRIGGER" 
 
 options:
   substitutionOption: 'ALLOW_LOOSE'
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-  # 1) Build
+  # 1) Build image
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build'
     args:
@@ -17,7 +17,7 @@ steps:
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}'
       - '.'
 
-  # 2) Push
+  # 2) Push image
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push'
     args:
@@ -31,16 +31,15 @@ steps:
     args:
       - '-c'
       - |
-        IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}"
         if [[ "$BRANCH_NAME" == "dev" ]]; then
           gcloud run deploy "${_SERVICE_NAME}" \
-            --image="${IMAGE}" \
+            --image="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}" \
             --region="${_REGION}" \
             --platform=managed \
             --allow-unauthenticated
         else
           gcloud run deploy "${_SERVICE_NAME}" \
-            --image="${IMAGE}" \
+            --image="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}" \
             --region="${_REGION}" \
             --platform=managed \
             --no-traffic \
