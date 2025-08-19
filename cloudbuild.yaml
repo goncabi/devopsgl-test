@@ -1,71 +1,53 @@
 substitutions:
   _REGION: "europe-west1"
   _AR_REPO: "hello-repo"
-  _SERVICE_PREFIX: "hello-world"
+  _SERVICE_NAME: "OVERRIDE_IN_TRIGGER"  # each trigger defines it
 
 options:
   substitutionOption: 'ALLOW_LOOSE'
   logging: CLOUD_LOGGING_ONLY
 
 steps:
-  # 1) Build image
+  # 1) Build
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build'
     args:
       - 'build'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_PREFIX}:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}'
       - '.'
 
-  # 2) Push image
+  # 2) Push
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push'
     args:
       - 'push'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_PREFIX}:${SHORT_SHA}'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}'
 
-  # 3) Set SERVICE_NAME según la rama
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'Set SERVICE_NAME'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        if [[ "$BRANCH_NAME" == "dev" ]]; then
-          echo "SERVICE_NAME=${_SERVICE_PREFIX}-dev" >> $$_ENV_FILE
-        elif [[ "$BRANCH_NAME" == "staging" ]]; then
-          echo "SERVICE_NAME=${_SERVICE_PREFIX}-staging" >> $$_ENV_FILE
-        else
-          echo "SERVICE_NAME=${_SERVICE_PREFIX}-prod" >> $$_ENV_FILE
-        fi
-    env:
-      - '_ENV_FILE=/workspace/build_env'
-
-  # 4) Deploy (dev con tráfico; staging/prod sin tráfico)
+  # 3) Deploy (dev con tráfico; staging/main sin tráfico)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Deploy'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        source /workspace/build_env
-        IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_PREFIX}:${SHORT_SHA}"
+        IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}"
         if [[ "$BRANCH_NAME" == "dev" ]]; then
-          gcloud run deploy "$SERVICE_NAME" \
-            --image="$IMAGE" \
+          gcloud run deploy "${_SERVICE_NAME}" \
+            --image="${IMAGE}" \
             --region="${_REGION}" \
             --platform=managed \
             --allow-unauthenticated
         else
-          gcloud run deploy "$SERVICE_NAME" \
-            --image="$IMAGE" \
+          gcloud run deploy "${_SERVICE_NAME}" \
+            --image="${IMAGE}" \
             --region="${_REGION}" \
             --platform=managed \
             --no-traffic \
             --allow-unauthenticated
         fi
 
-  # 5) Switch de tráfico a 100% (staging/prod)
+  # 4) Switch de tráfico (solo staging/main)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Switch traffic to 100%'
     entrypoint: 'bash'
@@ -76,12 +58,14 @@ steps:
           echo "Dev branch - traffic already switched."
           exit 0
         fi
-        source /workspace/build_env
-        REV=$(gcloud run revisions list --service="$SERVICE_NAME" --region="${_REGION}" --format='value(metadata.name)' --limit=1)
-        gcloud run services update-traffic "$SERVICE_NAME" \
+        REV=$(gcloud run revisions list \
+          --service="${_SERVICE_NAME}" \
+          --region="${_REGION}" \
+          --format='value(metadata.name)' --limit=1)
+        gcloud run services update-traffic "${_SERVICE_NAME}" \
           --region="${_REGION}" \
           --to-revisions "${REV}=100"
 
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_PREFIX}:${SHORT_SHA}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}'
 
