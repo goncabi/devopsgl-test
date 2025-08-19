@@ -1,70 +1,21 @@
 substitutions:
-  _REGION: "europe-west1"         
-  _AR_REPO: "hello-repo"          
-  _SERVICE_NAME: "OVERRIDE_IN_TRIGGER" 
-
-options:
-  substitutionOption: 'ALLOW_LOOSE'
-  logging: CLOUD_LOGGING_ONLY
+  _REGION: "europe-west1"
+  _AR_REPO: "hello-repo"
+  _SERVICE_NAME: "OVERRIDE_IN_TRIGGER"
+  _TRAFFIC_FLAG: "--allow-unauthenticated"   # override en triggers de staging/prod
 
 steps:
-  # 1) Build image
   - name: 'gcr.io/cloud-builders/docker'
-    id: 'Build'
-    args:
-      - 'build'
-      - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}'
-      - '.'
+    args: ['build','-t','${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}','.']
 
-  # 2) Push image
   - name: 'gcr.io/cloud-builders/docker'
-    id: 'Push'
-    args:
-      - 'push'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}'
+    args: ['push','${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}']
 
-  # 3) Deploy (dev con tráfico; staging/main sin tráfico)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'Deploy'
-    entrypoint: 'bash'
     args:
-      - '-c'
-      - |
-        if [[ "$BRANCH_NAME" == "dev" ]]; then
-          gcloud run deploy "${_SERVICE_NAME}" \
-            --image="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}" \
-            --region="${_REGION}" \
-            --platform=managed \
-            --allow-unauthenticated
-        else
-          gcloud run deploy "${_SERVICE_NAME}" \
-            --image="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}" \
-            --region="${_REGION}" \
-            --platform=managed \
-            --no-traffic \
-            --allow-unauthenticated
-        fi
-
-  # 4) Switch de tráfico (solo staging/main)
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'Switch traffic to 100%'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        if [[ "$BRANCH_NAME" == "dev" ]]; then
-          echo "Dev branch - traffic already switched."
-          exit 0
-        fi
-        REV=$(gcloud run revisions list \
-          --service="${_SERVICE_NAME}" \
-          --region="${_REGION}" \
-          --format='value(metadata.name)' --limit=1)
-        gcloud run services update-traffic "${_SERVICE_NAME}" \
-          --region="${_REGION}" \
-          --to-revisions "${REV}=100"
-
+      ['run','deploy','${_SERVICE_NAME}',
+       '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}',
+       '--region=${_REGION}','--platform=managed','${_TRAFFIC_FLAG}']
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}:${SHORT_SHA}'
 
