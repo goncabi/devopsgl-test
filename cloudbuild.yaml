@@ -8,6 +8,7 @@ options:
   logging: CLOUD_LOGGING_ONLY
 
 steps:
+  # 1) Build image
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build'
     args:
@@ -16,12 +17,14 @@ steps:
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_PREFIX}:${SHORT_SHA}'
       - '.'
 
+  # 2) Push image
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push'
     args:
       - 'push'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_PREFIX}:${SHORT_SHA}'
 
+  # 3) Set SERVICE_NAME según la rama
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Set SERVICE_NAME'
     entrypoint: 'bash'
@@ -38,6 +41,7 @@ steps:
     env:
       - '_ENV_FILE=/workspace/build_env'
 
+  # 4) Deploy (dev con tráfico; staging/prod sin tráfico)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Deploy'
     entrypoint: 'bash'
@@ -61,19 +65,7 @@ steps:
             --allow-unauthenticated
         fi
 
-  - id: 'Approval for traffic switch'
-    name: 'gcr.io/cloud-builders/gcloud'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        if [[ "$BRANCH_NAME" == "dev" ]]; then
-          echo "Dev branch - skipping approval."
-        else
-          echo "Awaiting manual approval to switch traffic..."
-        fi
-    approval: true
-
+  # 5) Switch de tráfico a 100% (staging/prod)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Switch traffic to 100%'
     entrypoint: 'bash'
@@ -92,3 +84,4 @@ steps:
 
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_PREFIX}:${SHORT_SHA}'
+
