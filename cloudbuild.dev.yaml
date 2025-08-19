@@ -1,6 +1,10 @@
 substitutions:
   _REGION: "europe-west1"
   _AR_REPO: "hello-repo"
+  
+options:
+  logging: CLOUD_LOGGING_ONLY       
+  substitutionOption: 'ALLOW_LOOSE'
 
 steps:
   - name: 'gcr.io/cloud-builders/docker'
