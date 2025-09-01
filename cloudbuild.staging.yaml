@@ -1,42 +1,27 @@
+substitutions:
+  _REGION: "europe-west1"
+  _AR_REPO: "hello-repo"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: 'ALLOW_LOOSE'
+
 steps:
-  # 1. Build Docker Image
   - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - build
-      - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-staging:${SHORT_SHA}'
-      - '.'
+    args: ['build',
+           '-t','${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-staging:${SHORT_SHA}',
+           '.']
 
-  # 2. Push Docker Image
   - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - push
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-staging:${SHORT_SHA}'
+    args: ['push',
+           '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-staging:${SHORT_SHA}']
 
-  # 3. Deploy to Cloud Run (with conditional no-traffic)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'bash'
-    args:
-      - -c
-      - |
-        set -e
-        if gcloud run services describe hello-world-staging --region=${_REGION} --platform=managed > /dev/null 2>&1; then
-          echo "Service exists → deploying new revision with --no-traffic"
-          gcloud run deploy hello-world-staging \
-            --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-staging:${SHORT_SHA} \
-            --region=${_REGION} \
-            --platform=managed \
-            --no-traffic \
-            --allow-unauthenticated
-        else
-          echo "Service does not exist yet → creating service with traffic"
-          gcloud run deploy hello-world-staging \
-            --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-staging:${SHORT_SHA} \
-            --region=${_REGION} \
-            --platform=managed \
-            --allow-unauthenticated
-        fi
+    entrypoint: 'gcloud'
+    args: ['run','deploy','hello-world-staging',
+           '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-staging:${SHORT_SHA}',
+           '--region=${_REGION}','--platform=managed','--allow-unauthenticated']
 
-# Optional: list the images produced by this build (helps with artifact tracking)
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-staging:${SHORT_SHA}'
+
