@@ -20,7 +20,7 @@ steps:
     entrypoint: 'gcloud'
     args: ['run','deploy','hello-world-staging',
            '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-staging:${SHORT_SHA}',
-           '--region=${_REGION}','--platform=managed','--allow-unauthenticated']
+           '--region=${_REGION}','--platform=managed', '--no-traffic', '--allow-unauthenticated']
 
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/hello-world-staging:${SHORT_SHA}'
