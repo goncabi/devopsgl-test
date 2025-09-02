@@ -37,22 +37,11 @@ steps:
       '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
     ]
 
-  # --- Start of new logic ---
-
-  # 4. Check if the service already exists.
+  # 4. Deploy the "Green" (new) version.
+  # Use 'gcloud run deploy' to create or update the service.
+  # The '--no-traffic' flag is key: it creates a new revision but sends 0% of traffic to it.
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'Check Service'
-    entrypoint: bash
-    args:
-      - '-c'
-      - |
-        gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
-          --region=${_REGION} > /dev/null 2>&1 || exit 0
-    allowFailure: true # Allows the step to fail without stopping the build
-
-  # 5. Conditional deployment (Initial Deployment)
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'Initial Deploy'
+    id: 'Deploy Green'
     entrypoint: gcloud
     args: [
       'run', 'deploy', '${_SERVICE_NAME}-${_ENV}',
@@ -61,29 +50,9 @@ steps:
       '--platform=managed',
       '--allow-unauthenticated'
     ]
-    # Only runs if the service does NOT exist.
-    waitFor: ['Check Service']
-    # The 'gcloud run services describe' command will exit with a non-zero status
-    # if the service does not exist. This step is configured to run if the previous
-    # step fails (due to the service not being found).
-    # This is an implicit dependency and an advanced Cloud Build feature.
 
-  # 6. Conditional deployment (Blue/Green)
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'Blue/Green Deploy'
-    entrypoint: gcloud
-    args: [
-      'run', 'deploy', '${_SERVICE_NAME}-${_ENV}',
-      '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}',
-      '--region=${_REGION}',
-      '--platform=managed',
-      '--allow-unauthenticated',
-      '--no-traffic'
-    ]
-    # This step runs only if the service ALREADY exists (Check Service was successful)
-    waitFor: ['Check Service']
-
-  # 7. Shift Traffic
+  # 5. Shift Traffic to make "Green" the new "Blue".
+  # This step switches 100% of traffic to the latest deployed revision.
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Shift Traffic'
     entrypoint: gcloud
@@ -92,11 +61,6 @@ steps:
       '--region=${_REGION}',
       '--to-latest'
     ]
-    # This step should run after either Initial Deploy or Blue/Green Deploy has completed.
-    # The waitFor: ['Initial Deploy', 'Blue/Green Deploy'] is an example, but this often
-    # works implicitly based on the flow.
-
-# --- End of new logic ---
 
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
