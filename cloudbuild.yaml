@@ -48,7 +48,8 @@ steps:
       '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}',
       '--region=${_REGION}',
       '--platform=managed',
-      '--allow-unauthenticated'
+      '--allow-unauthenticated',
+      '--no-traffic'
     ]
 
   # 5. Shift Traffic to make "Green" the new "Blue".
