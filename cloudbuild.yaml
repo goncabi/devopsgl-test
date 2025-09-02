@@ -1,0 +1,53 @@
+substitutions:
+  _REGION: "europe-west1"
+  _AR_REPO: "hello-repo"
+  _ENV: "dev" # Default environment. Can be overridden with --substitutions
+  _SERVICE_NAME: "hello-world" # Default service name
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  substitutionOption: 'ALLOW_LOOSE'
+
+steps:
+  # 1. Build the container image, tagging with the environment name
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Build'
+    args: [
+      'build',
+      '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}',
+      '.'
+    ]
+
+  # 2. Push the container image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Push'
+    args: [
+      'push',
+      '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
+    ]
+
+  # 3. Deploy new revision to Cloud Run without directing traffic to it (Green deployment)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'Deploy Green'
+    entrypoint: gcloud
+    args: [
+      'run', 'deploy', '${_SERVICE_NAME}-${_ENV}',
+      '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}',
+      '--region=${_REGION}',
+      '--platform=managed',
+      '--allow-unauthenticated',
+      '--no-traffic' # This deploys the new revision but sends no traffic to it.
+    ]
+
+  # 4. Shift 100% of traffic to the new revision (making it Blue/Live)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'Shift Traffic'
+    entrypoint: gcloud
+    args: [
+      'run', 'services', 'update-traffic', '${_SERVICE_NAME}-${_ENV}',
+      '--region=${_REGION}',
+      '--to-latest' # This shifts 100% of traffic to the latest revision.
+    ]
+
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
