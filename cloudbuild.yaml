@@ -9,16 +9,29 @@ options:
   substitutionOption: 'ALLOW_LOOSE'
 
 steps:
-  # 1. Build the container image, tagging with the environment name
+  # 1. Run tests by building up to the 'build' stage in the Dockerfile.
+  # The build will fail here if tests do not pass.
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Test'
+    args:
+      - 'build'
+      - '--target=build' # Specifies which stage to build up to
+      - '-t'
+      - 'test-image' # Tag is required but image is discarded
+      - '.'
+
+  # 2. Build the final production container image.
+  # This step only runs if the 'Test' step was successful.
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build'
+    waitFor: ['Test'] # Wait for the 'Test' step to succeed before building
     args: [
       'build',
       '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}',
       '.'
     ]
 
-  # 2. Push the container image to Artifact Registry
+  # 3. Push the container image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push'
     args: [
@@ -26,7 +39,7 @@ steps:
       '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
     ]
 
-  # 3. Deploy new revision to Cloud Run without directing traffic to it (Green deployment)
+  # 4. Deploy Green: Deploy the new revision without sending user traffic to it.
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Deploy Green'
     entrypoint: gcloud
@@ -36,17 +49,17 @@ steps:
       '--region=${_REGION}',
       '--platform=managed',
       '--allow-unauthenticated',
-      '--no-traffic' # This deploys the new revision but sends no traffic to it.
+      '--no-traffic' # This is the key flag for the "Green" deployment.
     ]
 
-  # 4. Shift 100% of traffic to the new revision (making it Blue/Live)
+  # 5. Shift Traffic: Switch 100% of user traffic to the new "Green" deployment, making it "Blue" (live).
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Shift Traffic'
     entrypoint: gcloud
     args: [
       'run', 'services', 'update-traffic', '${_SERVICE_NAME}-${_ENV}',
       '--region=${_REGION}',
-      '--to-latest' # This shifts 100% of traffic to the latest revision.
+      '--to-latest' # This shifts 100% of traffic to the newest revision.
     ]
 
 images:

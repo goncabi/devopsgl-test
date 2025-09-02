@@ -4,7 +4,8 @@
   "description": "A simple hello-world Express application.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "jest"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -12,5 +13,9 @@
   "license": "MIT",
   "dependencies": {
     "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.4"
   }
 }
