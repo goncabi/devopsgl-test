@@ -63,4 +63,4 @@ steps:
     ]
 
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
