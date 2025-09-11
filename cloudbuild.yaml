@@ -67,9 +67,9 @@ steps:
     args:
       - -c
       - |
-        URL=$(cat green_url.txt)
-        echo "Smoke testing $URL"
-        curl --fail --silent --show-error "$URL" || (echo "Smoke test failed"; exit 1)
+        _URL=$(cat green_url.txt)
+        echo "Smoke testing $_URL"
+        curl --fail --silent --show-error "$_URL" || (echo "Smoke test failed"; exit 1)
 
   # 6. Integration Test (Body prüfen)
   - name: 'node:18'
@@ -78,9 +78,9 @@ steps:
     args:
       - -c
       - |
-        URL=$(cat green_url.txt)
+        _URL=$(cat green_url.txt)
         npm ci
-        node tests/integration/check_remote.js "$URL"
+        node tests/integration/check_remote.js "$_URL"
 
   # 7. Shift Traffic (nur wenn Tests bestanden)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
