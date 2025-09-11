@@ -9,7 +9,7 @@ options:
   substitutionOption: 'ALLOW_LOOSE'
 
 steps:
-  # 1. Build & Test Stage (läuft automatisch im Dockerfile)
+  # 1. Build & Test Stage
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build with Tests'
     args:
@@ -18,14 +18,14 @@ steps:
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
       - '.'
 
-  # 2. Push the tested container image to Artifact Registry.
+  # 2. Push the tested container image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push'
     args:
       - 'push'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
 
-  # 3. Deploy the "Green" (new) version (0% traffic).
+  # 3. Deploy the "Green" (new) version (0% traffic)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Deploy Green'
     entrypoint: gcloud
