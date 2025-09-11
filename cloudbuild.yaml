@@ -9,59 +9,84 @@ options:
   substitutionOption: 'ALLOW_LOOSE'
 
 steps:
-  # 1. Run tests.
+  # 1. Build & Test Stage (läuft automatisch im Dockerfile)
   - name: 'gcr.io/cloud-builders/docker'
-    id: 'Test'
+    id: 'Build with Tests'
     args:
       - 'build'
-      - '--target=build'
       - '-t'
-      - 'test-image'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
       - '.'
 
-  # 2. Build the final production container image.
-  - name: 'gcr.io/cloud-builders/docker'
-    id: 'Build'
-    waitFor: ['Test']
-    args: [
-      'build',
-      '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}',
-      '.'
-    ]
-
-  # 3. Push the container image to Artifact Registry.
+  # 2. Push the tested container image to Artifact Registry.
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push'
-    args: [
-      'push',
-      '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
-    ]
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
 
-  # 4. Deploy the "Green" (new) version.
-  # Use 'gcloud run deploy' to create or update the service.
-  # The '--no-traffic' flag is key: it creates a new revision but sends 0% of traffic to it.
+  # 3. Deploy the "Green" (new) version (0% traffic).
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Deploy Green'
     entrypoint: gcloud
-    args: [
-      'run', 'deploy', '${_SERVICE_NAME}-${_ENV}',
-      '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}',
-      '--region=${_REGION}',
-      '--platform=managed',
-      '--allow-unauthenticated',
-      '--no-traffic'
-    ]
+    args:
+      - run
+      - deploy
+      - '${_SERVICE_NAME}-${_ENV}'
+      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--no-traffic'
 
-  # 5. Shift Traffic to make "Green" the new "Blue".
-  # This step switches 100% of traffic to the latest deployed revision.
+  # 4. Get Green URL
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'Get Green URL'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} --region=${_REGION} --format="value(status.latestReadyRevisionName)")
+        if [ -z "$REV" ]; then
+          REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} --region=${_REGION} --format="value(status.latestCreatedRevisionName)")
+        fi
+        echo "Green revision: $REV"
+        gcloud run revisions describe "$REV" --region=${_REGION} --format="value(status.url)" > green_url.txt
+        cat green_url.txt
+
+  # 5. Smoke Test (HTTP 200)
+  - name: 'curlimages/curl'
+    id: 'Smoke Test'
+    entrypoint: /bin/sh
+    args:
+      - -c
+      - |
+        URL=$(cat green_url.txt)
+        echo "Smoke testing $URL"
+        curl --fail --silent --show-error "$URL" || (echo "Smoke test failed"; exit 1)
+
+  # 6. Integration Test (Body prüfen)
+  - name: 'node:18'
+    id: 'Integration Tests'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        URL=$(cat green_url.txt)
+        npm ci
+        node tests/integration/check_remote.js "$URL"
+
+  # 7. Shift Traffic (nur wenn Tests bestanden)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Shift Traffic'
     entrypoint: gcloud
-    args: [
-      'run', 'services', 'update-traffic', '${_SERVICE_NAME}-${_ENV}',
-      '--region=${_REGION}',
-      '--to-latest'
-    ]
+    args:
+      - run
+      - services
+      - update-traffic
+      - '${_SERVICE_NAME}-${_ENV}'
+      - '--region=${_REGION}'
+      - '--to-latest'
 
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
