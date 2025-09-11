@@ -46,22 +46,21 @@ steps:
     args:
       - -c
       - |
-      # Lokale Bash-Variable für die Revision
+        # Lokale Bash-Variable für die Revision
         GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
-        --region=${_REGION} \
-        --format="value(status.latestReadyRevisionName)")
+          --region=${_REGION} \
+          --format="value(status.latestReadyRevisionName)")
         if [ -z "$GREEN_REV" ]; then
-        GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
-        --region=${_REGION} \
-        --format="value(status.latestCreatedRevisionName)")
+          GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
+            --region=${_REGION} \
+            --format="value(status.latestCreatedRevisionName)")
         fi
         echo "Green revision: $GREEN_REV"
         gcloud run revisions describe "$GREEN_REV" --region=${_REGION} \
-        --format="value(status.url)" > green_url.txt
+          --format="value(status.url)" > green_url.txt
         cat green_url.txt
 
-
-# 5. Smoke Test (HTTP 200)
+  # 5. Smoke Test (HTTP 200)
   - name: 'curlimages/curl'
     id: 'Smoke Test'
     entrypoint: /bin/sh
