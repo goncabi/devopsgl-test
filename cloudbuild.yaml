@@ -43,7 +43,7 @@ steps:
             echo "$_DEPLOY_OUTPUT"
             
             # Extract the deployed revision name from gcloud output
-            _GREEN_REV=$(echo "$_DEPLOY_OUTPUT" | grep -oP '\[${_SERVICE_NAME}-${_ENV}-[a-z0-9-]+\]' | tr -d '[]')
+            _GREEN_REV=$(echo "$_DEPLOY_OUTPUT" | grep -oP "\[${_SERVICE_NAME}-${_ENV}-[a-z0-9-]+\]" | tr -d '[]')
             
             if [ -z "$_GREEN_REV" ]; then
               echo "ERROR: could not extract revision name from deploy output"
