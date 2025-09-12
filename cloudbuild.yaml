@@ -41,48 +41,65 @@ steps:
 
   # 4. Get Green URL
   # a little loop to make sure that the revision isn't empty
+  # plus extra delay
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Get Green URL'
     entrypoint: bash
     args:
       - -c
       - |
-        # Revision ermitteln
-        _GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
-          --region=${_REGION} \
-          --format="value(status.latestReadyRevisionName)")
+        echo "Looking for revision of service ${_SERVICE_NAME}-${_ENV}..."
 
-        if [ -z "$_GREEN_REV" ]; then
-          echo "No latestReadyRevisionName found, falling back to latestCreatedRevisionName..."
+        _GREEN_REV=""
+        # Try up to 10 times (with 5s delay) to find a revision
+        for i in {1..10}; do
+          # First try to get the latest *ready* revision
           _GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
             --region=${_REGION} \
-            --format="value(status.latestCreatedRevisionName)")
-        fi
+            --format="value(status.latestReadyRevisionName)")
 
+          # If no ready revision is found, fall back to the latest *created* one
+          if [ -z "$_GREEN_REV" ]; then
+            _GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
+              --region=${_REGION} \
+              --format="value(status.latestCreatedRevisionName)")
+          fi
+
+          # Stop the loop if we found a revision
+          if [ -n "$_GREEN_REV" ]; then
+            echo "Found revision: $_GREEN_REV"
+            break
+          fi
+
+          # Wait before retrying
+          echo "No revision found yet, waiting 5s..."
+          sleep 5
+        done
+
+        # Fail if no revision could be found after all retries
         if [ -z "$_GREEN_REV" ]; then
-          echo "ERROR: Keine Revision gefunden!"
+          echo "ERROR: No revision found after 10 attempts!"
           exit 1
         fi
 
-        echo "Green revision: $_GREEN_REV"
-
-        # Sicherstellen, dass Revision wirklich bereit ist
-        echo "Warte, bis Revision $_GREEN_REV bereit ist..."
+        echo "Waiting for revision $_GREEN_REV to become ready..."
+        # Check if the revision is ready (up to 10 attempts with 5s delay)
         for i in {1..10}; do
           _IS_READY=$(gcloud run revisions describe "$_GREEN_REV" --region=${_REGION} \
             --format="value(status.conditions[?type=Ready].status)")
           if [ "$_IS_READY" = "True" ]; then
-            echo "Revision ist bereit."
+            echo "Revision is ready."
             break
           fi
-          echo "Noch nicht bereit, warte 5s..."
+          echo "Revision not ready yet, waiting 5s..."
           sleep 5
         done
 
-        # URL speichern
+        # Finally, fetch the public URL of the ready revision
         gcloud run revisions describe "$_GREEN_REV" --region=${_REGION} \
           --format="value(status.url)" > green_url.txt
         echo "Green URL: $(cat green_url.txt)"
+  
   
 
   # 5. Smoke Test (HTTP 200)
