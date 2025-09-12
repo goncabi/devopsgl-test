@@ -18,7 +18,7 @@ steps:
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
       - '.'
 
-    # 2. Push the tested container image to Artifact Registry (with retry)
+  # 2. Push the tested container image to Artifact Registry (with retry)
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push'
     entrypoint: bash
@@ -48,29 +48,29 @@ steps:
     id: 'Deploy Green'
     entrypoint: bash
     args:
-          - -c
-          - |
-            echo "Deploying service ${_SERVICE_NAME}-${_ENV}..."
-            _DEPLOY_OUTPUT=$(gcloud run deploy ${_SERVICE_NAME}-${_ENV} \
-              --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA} \
-              --region=${_REGION} \
-              --platform=managed \
-              --allow-unauthenticated \
-              --no-traffic)
-            
-            echo "$_DEPLOY_OUTPUT"
-            
-            # Extract the deployed revision name from the output robustly
-            _GREEN_REV=$(echo "$_DEPLOY_OUTPUT" | grep "revision \[" | tail -n1 | sed -E 's/.*revision \[([^\]]+)\].*/\1/')
-            
-            if [ -z "$_GREEN_REV" ]; then
-              echo "ERROR: could not extract revision name from deploy output"
-              exit 1
-            fi
-            
-            # Save the revision for later steps
-            echo "$_GREEN_REV" > green_rev.txt
-            echo "Deployed revision: $_GREEN_REV"
+      - -c
+      - |
+        echo "Deploying service ${_SERVICE_NAME}-${_ENV}..."
+
+        # Run the deploy command and get the latest ready revision directly from JSON output
+        # --format="value(status.latestReadyRevisionName)" extracts only the revision name
+        _GREEN_REV=$(gcloud run deploy ${_SERVICE_NAME}-${_ENV} \
+          --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA} \
+          --region=${_REGION} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --no-traffic \
+          --format="value(status.latestReadyRevisionName)")
+
+        # Check if a revision was returned
+        if [ -z "$_GREEN_REV" ]; then
+          echo "ERROR: no revision found from deploy command"
+          exit 1
+        fi
+
+        # Save the revision name for later steps
+        echo "$_GREEN_REV" > green_rev.txt
+        echo "Deployed revision: $_GREEN_REV"
 
  # 4. Get Green URL (from extracted revision)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
