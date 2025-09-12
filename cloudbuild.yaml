@@ -103,15 +103,16 @@ steps:
     args:
         - -c
         - |
-          GREEN_REV=$(cat green_rev.txt)
-          URL=$(gcloud run revisions describe "$GREEN_REV" --region=${_REGION} --format="value(status.url)")
+          GREEN_REV=$$(cat green_rev.txt)
+          URL=$$(gcloud run revisions describe "$$GREEN_REV" --region=${_REGION} --format="value(status.url)")
           
-          if [ -z "$URL" ]; then
-          echo "ERROR: No URL found for revision $GREEN_REV"
+          if [ -z "$$URL" ]; then
+          echo "ERROR: No URL found for revision $$GREEN_REV"
           exit 1
           fi
-          echo "$URL" > green_url.txt
-          echo "Green URL: $URL"
+          
+          echo "$$URL" > green_url.txt
+          echo "Green URL: $$URL"
   
 
   # 5. Smoke Test (HTTP 200)
@@ -121,16 +122,16 @@ steps:
     args:
       - -c
       - |
-        URL=$(cat green_url.txt)
+        URL=$$(cat green_url.txt)
 
-        if [ -z "$URL" ]; then
+        if [ -z "$$URL" ]; then
           echo "ERROR: No URL found in green_url.txt"
           exit 1
         fi
 
-        echo "Smoke testing $URL..."
-        if ! curl --fail --silent --show-error "$URL"; then
-          echo "Smoke test failed for $URL"
+        echo "Smoke testing $$URL..."
+        if ! curl --fail --silent --show-error "$$URL"; then
+          echo "Smoke test failed for $$URL"
           exit 1
         fi
 
