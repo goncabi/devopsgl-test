@@ -63,9 +63,14 @@ steps:
         # Wait for the latestReadyRevisionName to be set (Set wait parameters)
         _MAX_WAIT=60  # total wait time in seconds
         _INTERVAL=5   # check interval in seconds
-        _RETRIES=$((_MAX_WAIT / _INTERVAL))
         
-        echo "Waiting up to $_MAX_WAIT seconds for revision to become ready..."
+        # Debug output to verify variable values
+        echo "_MAX_WAIT=$_MAX_WAIT"
+        echo "_INTERVAL=$_INTERVAL"
+
+        # Compute retries
+        _RETRIES=$((_MAX_WAIT / _INTERVAL))
+        echo "_RETRIES=$_RETRIES"
 
         _GREEN_REV=""
         for i in $(seq 1 $_RETRIES); do
