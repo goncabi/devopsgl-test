@@ -29,18 +29,18 @@ steps:
           MAX_RETRIES=5
           RETRY_DELAY=5
 
-          for i in $(seq 1 $MAX_RETRIES); do
-            echo "Pushing Docker image (attempt $i/$MAX_RETRIES)..."
+          for i in $(seq 1 ${MAX_RETRIES}); do
+            echo "Pushing Docker image (attempt $i/${MAX_RETRIES})..."
             if docker push "$IMAGE"; then
               echo "Push successful"
               break
             else
-              echo "Push failed, retrying in $RETRY_DELAY seconds..."
-              sleep $RETRY_DELAY
+              echo "Push failed, retrying in ${RETRY_DELAY} seconds..."
+              sleep ${RETRY_DELAY}
             fi
 
-            if [ "$i" -eq "$MAX_RETRIES" ]; then
-            echo "ERROR: Docker push failed after $MAX_RETRIES attempts"
+            if [ "$i" -eq "${MAX_RETRIES}" ]; then
+            echo "ERROR: Docker push failed after ${MAX_RETRIES} attempts"
             exit 1
           fi
           done
@@ -73,7 +73,7 @@ steps:
         echo "Waiting up to $MAX_WAIT seconds for revision to become ready..."
 
         GREEN_REV=""
-        for i in $(seq 1 $RETRIES); do
+        for i in $(seq 1 ${RETRIES}); do
           GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
             --region=${_REGION} \
             --platform=managed \
@@ -84,12 +84,12 @@ steps:
             break
           fi
 
-          echo "Waiting for revision to become ready... attempt $i/$RETRIES"
-          sleep $INTERVAL
+          echo "Waiting for revision to become ready... attempt $i/${RETRIES}"
+          sleep ${INTERVAL}
         done
 
         if [ -z "$GREEN_REV" ]; then
-          echo "ERROR: no revision found after waiting $MAX_WAIT seconds"
+          echo "ERROR: no revision found after waiting ${MAX_WAIT} seconds"
           exit 1
         fi
 
