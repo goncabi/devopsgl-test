@@ -29,18 +29,18 @@ steps:
           MAX_RETRIES=5
           RETRY_DELAY=5
 
-          for i in $(seq 1 ${MAX_RETRIES}); do
-            echo "Pushing Docker image (attempt $i/${MAX_RETRIES})..."
-            if docker push "$IMAGE"; then
+          for i in $(seq 1 $$MAX_RETRIES); do
+            echo "Pushing Docker image (attempt $$i/$$MAX_RETRIES)..."
+            if docker push "$$IMAGE"; then
               echo "Push successful"
               break
             else
-              echo "Push failed, retrying in ${RETRY_DELAY} seconds..."
-              sleep ${RETRY_DELAY}
+              echo "Push failed, retrying in $$RETRY_DELAY seconds..."
+              sleep $$RETRY_DELAY
             fi
 
-            if [ "$i" -eq "${MAX_RETRIES}" ]; then
-            echo "ERROR: Docker push failed after ${MAX_RETRIES} attempts"
+            if [ "$$i" -eq "$$MAX_RETRIES" ]; then
+            echo "ERROR: Docker push failed after $$MAX_RETRIES attempts"
             exit 1
           fi
           done
@@ -68,33 +68,33 @@ steps:
         # Wait for ready revision
         MAX_WAIT=180
         INTERVAL=5
-        RETRIES=$((MAX_WAIT / INTERVAL))
+        RETRIES=$$((MAX_WAIT / INTERVAL))
         
-        echo "Waiting up to $MAX_WAIT seconds for revision to become ready..."
+        echo "Waiting up to $$MAX_WAIT seconds for revision to become ready..."
 
         GREEN_REV=""
-        for i in $(seq 1 ${RETRIES}); do
+        for i in $(seq 1 $${RETRIES}); do
           GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
             --region=${_REGION} \
             --platform=managed \
             --format="value(status.latestReadyRevisionName)")
 
-          if [ -n "$GREEN_REV" ]; then
-            echo "Revision is ready: $GREEN_REV"
+          if [ -n "$$GREEN_REV" ]; then
+            echo "Revision is ready: $$GREEN_REV"
             break
           fi
 
-          echo "Waiting for revision to become ready... attempt $i/${RETRIES}"
-          sleep ${INTERVAL}
+          echo "Waiting for revision to become ready... attempt $$i/$$RETRIES"
+          sleep $$INTERVAL
         done
 
-        if [ -z "$GREEN_REV" ]; then
-          echo "ERROR: no revision found after waiting ${MAX_WAIT} seconds"
+        if [ -z "$$GREEN_REV" ]; then
+          echo "ERROR: no revision found after waiting $$MAX_WAIT seconds"
           exit 1
         fi
 
         # Save revision for later steps
-        echo "$GREEN_REV" > green_rev.txt
+        echo "$$GREEN_REV" > green_rev.txt
 
   # 4. Get Green URL (from extracted revision)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -105,8 +105,8 @@ steps:
         - |
           GREEN_REV=$(cat green_rev.txt)
           URL=$(gcloud run revisions describe "$GREEN_REV" --region=${_REGION} --format="value(status.url)")
-          echo "$URL" > green_url.txt
-          echo "Green URL: $URL"
+          echo "$$URL" > green_url.txt
+          echo "Green URL: $$URL"
   
 
   # 5. Smoke Test (HTTP 200)
@@ -117,9 +117,9 @@ steps:
       - -c
       - |
         _URL=$(cat green_url.txt)
-        echo "Smoke testing $_URL"
+        echo "Smoke testing $$_URL"
         # curl --fail --silent --show-error "$_URL" || (echo "Smoke test failed"; exit 1)
-        if ! curl --fail --silent --show-error "$_URL"; then
+        if ! curl --fail --silent --show-error "$$_URL"; then
         echo "Smoke test failed"
         exit 1
         fi
@@ -133,7 +133,7 @@ steps:
       - |
         _URL=$(cat green_url.txt)
         npm ci
-        node tests/integration/check_remote.js "$_URL"
+        node tests/integration/check_remote.js "$$_URL"
 
   # 7. Shift Traffic (nur wenn Tests bestanden)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
