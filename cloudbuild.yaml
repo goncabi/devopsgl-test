@@ -60,12 +60,15 @@ steps:
           --allow-unauthenticated \
           --no-traffic
 
-        # Wait for the latestReadyRevisionName to be set
+        # Wait for the latestReadyRevisionName to be set (Set wait parameters)
         _MAX_WAIT=60  # total wait time in seconds
         _INTERVAL=5   # check interval in seconds
+        _RETRIES=$((_MAX_WAIT / _INTERVAL))
+        
+        echo "Waiting up to $_MAX_WAIT seconds for revision to become ready..."
 
         _GREEN_REV=""
-        for i in $(seq 1 $(($_MAX_WAIT / $_INTERVAL))); do
+        for i in $(seq 1 $_RETRIES); do
           _GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
             --region=${_REGION} \
             --platform=managed \
@@ -76,7 +79,7 @@ steps:
             break
           fi
 
-          echo "Waiting for revision to become ready... ($i)"
+          echo "Waiting for revision to become ready... attempt $i/$_RETRIES"
           sleep $_INTERVAL
         done
 
