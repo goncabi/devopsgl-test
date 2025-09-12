@@ -40,25 +40,50 @@ steps:
       - '--no-traffic'
 
   # 4. Get Green URL
+  # a little loop to make sure that the revision isn't empty
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Get Green URL'
     entrypoint: bash
     args:
       - -c
       - |
-        # Lokale Bash-Variable mit "_" prefix, um Substitution-Fehler zu vermeiden
+        # Revision ermitteln
         _GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
           --region=${_REGION} \
           --format="value(status.latestReadyRevisionName)")
+
         if [ -z "$_GREEN_REV" ]; then
+          echo "No latestReadyRevisionName found, falling back to latestCreatedRevisionName..."
           _GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
             --region=${_REGION} \
             --format="value(status.latestCreatedRevisionName)")
         fi
+
+        if [ -z "$_GREEN_REV" ]; then
+          echo "ERROR: Keine Revision gefunden!"
+          exit 1
+        fi
+
         echo "Green revision: $_GREEN_REV"
+
+        # Sicherstellen, dass Revision wirklich bereit ist
+        echo "Warte, bis Revision $_GREEN_REV bereit ist..."
+        for i in {1..10}; do
+          READY=$(gcloud run revisions describe "$_GREEN_REV" --region=${_REGION} \
+            --format="value(status.conditions[?type=Ready].status)")
+          if [ "$READY" = "True" ]; then
+            echo "Revision ist bereit."
+            break
+          fi
+          echo "Noch nicht bereit, warte 5s..."
+          sleep 5
+        done
+
+        # URL speichern
         gcloud run revisions describe "$_GREEN_REV" --region=${_REGION} \
           --format="value(status.url)" > green_url.txt
-        cat green_url.txt
+        echo "Green URL: $(cat green_url.txt)"
+  
 
   # 5. Smoke Test (HTTP 200)
   - name: 'curlimages/curl'
