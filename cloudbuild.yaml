@@ -43,7 +43,7 @@ steps:
         done
 
 
-  # 3. Deploy the "Green" (new) version (0% traffic) and extract revision
+  # 3. Deploy the "Green" version and wait until the revision is ready
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Deploy Green'
     entrypoint: bash
@@ -52,25 +52,41 @@ steps:
       - |
         echo "Deploying service ${_SERVICE_NAME}-${_ENV}..."
 
-        # Run the deploy command and get the latest ready revision directly from JSON output
-        # --format="value(status.latestReadyRevisionName)" extracts only the revision name
-        _GREEN_REV=$(gcloud run deploy ${_SERVICE_NAME}-${_ENV} \
+        # Run deploy
+        gcloud run deploy ${_SERVICE_NAME}-${_ENV} \
           --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA} \
           --region=${_REGION} \
           --platform=managed \
           --allow-unauthenticated \
-          --no-traffic \
-          --format="value(status.latestReadyRevisionName)")
+          --no-traffic
 
-        # Check if a revision was returned
+        # Wait for the latestReadyRevisionName to be set
+        _MAX_WAIT=60  # total wait time in seconds
+        _INTERVAL=5   # check interval in seconds
+
+        _GREEN_REV=""
+        for i in $(seq 1 $(($_MAX_WAIT / $_INTERVAL))); do
+          _GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
+            --region=${_REGION} \
+            --platform=managed \
+            --format="value(status.latestReadyRevisionName)")
+
+          if [ -n "$_GREEN_REV" ]; then
+            echo "Revision is ready: $_GREEN_REV"
+            break
+          fi
+
+          echo "Waiting for revision to become ready... ($i)"
+          sleep $_INTERVAL
+        done
+
         if [ -z "$_GREEN_REV" ]; then
-          echo "ERROR: no revision found from deploy command"
+          echo "ERROR: no revision found after waiting $_MAX_WAIT seconds"
           exit 1
         fi
 
-        # Save the revision name for later steps
+        # Save revision for later steps
         echo "$_GREEN_REV" > green_rev.txt
-        echo "Deployed revision: $_GREEN_REV"
 
  # 4. Get Green URL (from extracted revision)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
