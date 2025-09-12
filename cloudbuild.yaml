@@ -66,7 +66,7 @@ steps:
           --no-traffic
 
         # Wait for ready revision
-        MAX_WAIT=60
+        MAX_WAIT=180
         INTERVAL=5
         RETRIES=$((MAX_WAIT / INTERVAL))
         
@@ -96,7 +96,7 @@ steps:
         # Save revision for later steps
         echo "$GREEN_REV" > green_rev.txt
 
- # 4. Get Green URL (from extracted revision)
+  # 4. Get Green URL (from extracted revision)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Get Green URL'
     entrypoint: bash
@@ -118,7 +118,11 @@ steps:
       - |
         _URL=$(cat green_url.txt)
         echo "Smoke testing $_URL"
-        curl --fail --silent --show-error "$_URL" || (echo "Smoke test failed"; exit 1)
+        # curl --fail --silent --show-error "$_URL" || (echo "Smoke test failed"; exit 1)
+        if ! curl --fail --silent --show-error "$_URL"; then
+        echo "Smoke test failed"
+        exit 1
+        fi
 
   # 6. Integration Test (Body prüfen)
   - name: 'node:18'
