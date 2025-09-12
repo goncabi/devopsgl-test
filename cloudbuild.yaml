@@ -51,7 +51,7 @@ steps:
           --region=${_REGION} \
           --format="value(status.latestReadyRevisionName)")
         if [ -z "$_GREEN_REV" ]; then
-          -GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
+          _GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
             --region=${_REGION} \
             --format="value(status.latestCreatedRevisionName)")
         fi
