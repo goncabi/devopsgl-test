@@ -57,7 +57,7 @@ steps:
         
         echo "Deploying service ${_SERVICE_NAME}-${_ENV}..."
 
-        # Run deploy
+        # Deploy the container (0% traffic)
         gcloud run deploy ${_SERVICE_NAME}-${_ENV} \
           --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA} \
           --region=${_REGION} \
@@ -65,13 +65,14 @@ steps:
           --allow-unauthenticated \
           --no-traffic
 
-        # Wait for ready revision
+        # Poll for the latest ready revision
         MAX_WAIT=180
         INTERVAL=5
         RETRIES=$$((MAX_WAIT / INTERVAL))
         
-        echo "Waiting up to $$MAX_WAIT seconds for revision to become ready..."
+        # echo "Waiting up to $$MAX_WAIT seconds for revision to become ready..."
 
+        # Poll for the latest ready revision
         GREEN_REV=""
         for i in $(seq 1 $$RETRIES); do
           GREEN_REV=$$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
@@ -93,29 +94,25 @@ steps:
           exit 1
         fi
 
-        # Save revision for later steps
+        # Save revision for traffic switch
         echo "$$GREEN_REV" > green_rev.txt
+        
+        # Fetch service-level URL immediately for Smoke Test
+        SERVICE_URL=$$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
+          --region=${_REGION} \
+          --platform=managed \
+          --format="value(status.url)")
 
-  # 4. Get Green URL (from extracted revision)
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'Get Green URL'
-    entrypoint: bash
-    args:
-        - -c
-        - |
-          GREEN_REV=$$(cat green_rev.txt)
-          URL=$$(gcloud run revisions describe "$$GREEN_REV" --region=${_REGION} --format="value(status.url)")
-          
-          if [ -z "$$URL" ]; then
-          echo "ERROR: No URL found for revision $$GREEN_REV"
+        if [ -z "$$SERVICE_URL" ]; then
+          echo "ERROR: No service URL found for ${_SERVICE_NAME}-${_ENV}"
           exit 1
-          fi
-          
-          echo "$$URL" > green_url.txt
-          echo "Green URL: $$URL"
-  
+        fi
 
-  # 5. Smoke Test (HTTP 200)
+        echo "$$SERVICE_URL" > green_url.txt
+        echo "Green service URL: $$SERVICE_URL"
+
+
+  # 4. Smoke Test (HTTP 200)
   - name: 'curlimages/curl'
     id: 'Smoke Test'
     entrypoint: /bin/sh
@@ -137,18 +134,18 @@ steps:
 
         echo "Smoke test succeeded"
 
-  # 6. Integration Test (Body prüfen)
+  # 5. Integration Test (Body prüfen)
   - name: 'node:18'
     id: 'Integration Tests'
     entrypoint: bash
     args:
       - -c
       - |
-        _URL=$(cat green_url.txt)
+        URL=$(cat green_url.txt)
         npm ci
-        node tests/integration/check_remote.js "$_URL"
+        node tests/integration/check_remote.js "$$URL"
 
-  # 7. Shift Traffic (nur wenn Tests bestanden)
+  # 6. Shift Traffic (nur wenn Tests bestanden)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Shift Traffic'
     entrypoint: gcloud
