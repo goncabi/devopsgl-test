@@ -73,8 +73,8 @@ steps:
         echo "Waiting up to $$MAX_WAIT seconds for revision to become ready..."
 
         GREEN_REV=""
-        for i in $(seq 1 $${RETRIES}); do
-          GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
+        for i in $(seq 1 $$RETRIES); do
+          GREEN_REV=$$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
             --region=${_REGION} \
             --platform=managed \
             --format="value(status.latestReadyRevisionName)")
@@ -103,8 +103,8 @@ steps:
     args:
         - -c
         - |
-          GREEN_REV=$(cat green_rev.txt)
-          URL=$(gcloud run revisions describe "$GREEN_REV" --region=${_REGION} --format="value(status.url)")
+          GREEN_REV=$$(cat green_rev.txt)
+          URL=$$(gcloud run revisions describe "$$GREEN_REV" --region=${_REGION} --format="value(status.url)")
           echo "$$URL" > green_url.txt
           echo "Green URL: $$URL"
   
