@@ -116,16 +116,16 @@ steps:
     args:
       - -c
       - |
-        URL=$(cat green_url.txt)
+        URL=$$(cat green_url.txt)
 
-        if [ -z "$URL" ]; then
+        if [ -z "$$URL" ]; then
           echo "ERROR: No URL found in green_url.txt"
           exit 1
         fi
 
         echo "Smoke testing $URL..."
-        if ! curl --fail --silent --show-error "$URL"; then
-          echo "Smoke test failed for $URL"
+        if ! curl --fail --silent --show-error "$$URL"; then
+          echo "Smoke test failed for $$URL"
           exit 1
         fi
 
