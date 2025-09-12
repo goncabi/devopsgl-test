@@ -9,59 +9,153 @@ options:
   substitutionOption: 'ALLOW_LOOSE'
 
 steps:
-  # 1. Run tests.
+  # 1. Build & Test Stage (Docker Image)
   - name: 'gcr.io/cloud-builders/docker'
-    id: 'Test'
+    id: 'Build with Tests'
     args:
       - 'build'
-      - '--target=build'
       - '-t'
-      - 'test-image'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
       - '.'
 
-  # 2. Build the final production container image.
-  - name: 'gcr.io/cloud-builders/docker'
-    id: 'Build'
-    waitFor: ['Test']
-    args: [
-      'build',
-      '-t', '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}',
-      '.'
-    ]
-
-  # 3. Push the container image to Artifact Registry.
+  # 2. Push the tested container image to Artifact Registry (with retry)
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push'
-    args: [
-      'push',
-      '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
-    ]
+    entrypoint: bash
+    args:
+        - -c
+        - |
+          IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}"
+          MAX_RETRIES=5
+          RETRY_DELAY=5
 
-  # 4. Deploy the "Green" (new) version.
-  # Use 'gcloud run deploy' to create or update the service.
-  # The '--no-traffic' flag is key: it creates a new revision but sends 0% of traffic to it.
+          for i in $(seq 1 $$MAX_RETRIES); do
+            echo "Pushing Docker image (attempt $$i/$$MAX_RETRIES)..."
+            if docker push "$$IMAGE"; then
+              echo "Push successful"
+              break
+            else
+              echo "Push failed, retrying in $$RETRY_DELAY seconds..."
+              sleep $$RETRY_DELAY
+            fi
+
+            if [ "$$i" -eq "$$MAX_RETRIES" ]; then
+            echo "ERROR: Docker push failed after $$MAX_RETRIES attempts"
+            exit 1
+          fi
+          done
+
+
+  # 3. Deploy the "Green" version and wait until the revision is ready
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Deploy Green'
-    entrypoint: gcloud
-    args: [
-      'run', 'deploy', '${_SERVICE_NAME}-${_ENV}',
-      '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}',
-      '--region=${_REGION}',
-      '--platform=managed',
-      '--allow-unauthenticated',
-      '--no-traffic'
-    ]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        
+        echo "Deploying service ${_SERVICE_NAME}-${_ENV}..."
 
-  # 5. Shift Traffic to make "Green" the new "Blue".
-  # This step switches 100% of traffic to the latest deployed revision.
+        # Deploy the container (0% traffic)
+        gcloud run deploy ${_SERVICE_NAME}-${_ENV} \
+          --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA} \
+          --region=${_REGION} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --no-traffic
+
+        # Poll for the latest ready revision
+        MAX_WAIT=180
+        INTERVAL=5
+        RETRIES=$$((MAX_WAIT / INTERVAL))
+        
+        # echo "Waiting up to $$MAX_WAIT seconds for revision to become ready..."
+
+        # Poll for the latest ready revision
+        GREEN_REV=""
+        for i in $(seq 1 $$RETRIES); do
+          GREEN_REV=$$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
+            --region=${_REGION} \
+            --platform=managed \
+            --format="value(status.latestReadyRevisionName)")
+
+          if [ -n "$$GREEN_REV" ]; then
+            echo "Revision is ready: $$GREEN_REV"
+            break
+          fi
+
+          echo "Waiting for revision to become ready... attempt $$i/$$RETRIES"
+          sleep $$INTERVAL
+        done
+
+        if [ -z "$$GREEN_REV" ]; then
+          echo "ERROR: no revision found after waiting $$MAX_WAIT seconds"
+          exit 1
+        fi
+
+        # Save revision for traffic switch
+        echo "$$GREEN_REV" > green_rev.txt
+        
+        # Fetch service-level URL immediately for Smoke Test
+        SERVICE_URL=$$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
+          --region=${_REGION} \
+          --platform=managed \
+          --format="value(status.url)")
+
+        if [ -z "$$SERVICE_URL" ]; then
+          echo "ERROR: No service URL found for ${_SERVICE_NAME}-${_ENV}"
+          exit 1
+        fi
+
+        echo "$$SERVICE_URL" > green_url.txt
+        echo "Green service URL: $$SERVICE_URL"
+
+
+  # 4. Smoke Test (HTTP 200)
+  - name: 'curlimages/curl'
+    id: 'Smoke Test'
+    entrypoint: /bin/sh
+    args:
+      - -c
+      - |
+        URL=$$(cat green_url.txt)
+
+        if [ -z "$$URL" ]; then
+          echo "ERROR: No URL found in green_url.txt"
+          exit 1
+        fi
+
+        echo "Smoke testing $$URL..."
+        if ! curl --fail --silent --show-error "$$URL"; then
+          echo "Smoke test failed for $$URL"
+          exit 1
+        fi
+
+        echo "Smoke test succeeded"
+
+  # 5. Integration Test (Body prüfen)
+  - name: 'node:18'
+    id: 'Integration Tests'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        URL=$(cat green_url.txt)
+        npm ci
+        node tests/integration/check_remote.js "$$URL"
+
+  # 6. Shift Traffic (nur wenn Tests bestanden)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Shift Traffic'
     entrypoint: gcloud
-    args: [
-      'run', 'services', 'update-traffic', '${_SERVICE_NAME}-${_ENV}',
-      '--region=${_REGION}',
-      '--to-latest'
-    ]
+    args:
+      - run
+      - services
+      - update-traffic
+      - '${_SERVICE_NAME}-${_ENV}'
+      - '--region=${_REGION}'
+      - '--to-latest'
 
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
