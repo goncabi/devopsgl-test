@@ -9,7 +9,7 @@ options:
   substitutionOption: 'ALLOW_LOOSE'
 
 steps:
-  # 1. Build & Test Stage
+  # 1. Build & Test Stage (Docker Image)
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build with Tests'
     args:
@@ -23,24 +23,27 @@ steps:
     id: 'Push'
     entrypoint: bash
     args:
-      - -c
-      - |
-        _IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}"
-        _MAX_RETRIES=5
-        _RETRY_DELAY=10
+        - -c
+        - |
+          IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}"
+          MAX_RETRIES=5
+          RETRY_DELAY=5
 
-        for i in $(seq 1 $_MAX_RETRIES); do
-          echo "Pushing image (attempt $i/$_MAX_RETRIES): $_IMAGE"
-          docker push "$_IMAGE" && break
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Pushing Docker image (attempt $i/$MAX_RETRIES)..."
+            if docker push "$IMAGE"; then
+              echo "Push successful"
+              break
+            else
+              echo "Push failed, retrying in $RETRY_DELAY seconds..."
+              sleep $RETRY_DELAY
+            fi
 
-          echo "Push failed, retrying in ${_RETRY_DELAY}s..."
-          sleep $_RETRY_DELAY
-
-          if [ $i -eq $_MAX_RETRIES ]; then
-            echo "ERROR: Docker push failed after $_MAX_RETRIES attempts."
+            if [ "$i" -eq "$MAX_RETRIES" ]; then
+            echo "ERROR: Docker push failed after $MAX_RETRIES attempts"
             exit 1
           fi
-        done
+          done
 
 
   # 3. Deploy the "Green" version and wait until the revision is ready
@@ -50,6 +53,8 @@ steps:
     args:
       - -c
       - |
+        set -e
+        
         echo "Deploying service ${_SERVICE_NAME}-${_ENV}..."
 
         # Run deploy
@@ -60,54 +65,48 @@ steps:
           --allow-unauthenticated \
           --no-traffic
 
-        # Wait for the latestReadyRevisionName to be set (Set wait parameters)
-        _MAX_WAIT=60  # total wait time in seconds
-        _INTERVAL=5   # check interval in seconds
+        # Wait for ready revision
+        MAX_WAIT=60
+        INTERVAL=5
+        RETRIES=$((MAX_WAIT / INTERVAL))
         
-        # Debug output to verify variable values
-        echo "_MAX_WAIT=$_MAX_WAIT"
-        echo "_INTERVAL=$_INTERVAL"
+        echo "Waiting up to $MAX_WAIT seconds for revision to become ready..."
 
-        # Compute retries
-        _RETRIES=$((_MAX_WAIT / _INTERVAL))
-        echo "_RETRIES=$_RETRIES"
-
-        _GREEN_REV=""
-        for i in $(seq 1 $_RETRIES); do
-          _GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
+        GREEN_REV=""
+        for i in $(seq 1 $RETRIES); do
+          GREEN_REV=$(gcloud run services describe ${_SERVICE_NAME}-${_ENV} \
             --region=${_REGION} \
             --platform=managed \
             --format="value(status.latestReadyRevisionName)")
 
-          if [ -n "$_GREEN_REV" ]; then
-            echo "Revision is ready: $_GREEN_REV"
+          if [ -n "$GREEN_REV" ]; then
+            echo "Revision is ready: $GREEN_REV"
             break
           fi
 
-          echo "Waiting for revision to become ready... attempt $i/$_RETRIES"
-          sleep $_INTERVAL
+          echo "Waiting for revision to become ready... attempt $i/$RETRIES"
+          sleep $INTERVAL
         done
 
-        if [ -z "$_GREEN_REV" ]; then
-          echo "ERROR: no revision found after waiting $_MAX_WAIT seconds"
+        if [ -z "$GREEN_REV" ]; then
+          echo "ERROR: no revision found after waiting $MAX_WAIT seconds"
           exit 1
         fi
 
         # Save revision for later steps
-        echo "$_GREEN_REV" > green_rev.txt
+        echo "$GREEN_REV" > green_rev.txt
 
  # 4. Get Green URL (from extracted revision)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Get Green URL'
     entrypoint: bash
     args:
-          - -c
-          - |
-            _GREEN_REV=$(cat green_rev.txt)
-            echo "Using revision $_GREEN_REV"
-            gcloud run revisions describe "$_GREEN_REV" --region=${_REGION} \
-              --format="value(status.url)" > green_url.txt
-            echo "Green URL: $(cat green_url.txt)"
+        - -c
+        - |
+          GREEN_REV=$(cat green_rev.txt)
+          URL=$(gcloud run revisions describe "$GREEN_REV" --region=${_REGION} --format="value(status.url)")
+          echo "$URL" > green_url.txt
+          echo "Green URL: $URL"
   
 
   # 5. Smoke Test (HTTP 200)
