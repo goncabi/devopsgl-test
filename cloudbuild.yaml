@@ -50,7 +50,7 @@ steps:
     args:
           - -c
           - |
-            echo "Deploying service..."
+            echo "Deploying service ${_SERVICE_NAME}-${_ENV}..."
             _DEPLOY_OUTPUT=$(gcloud run deploy ${_SERVICE_NAME}-${_ENV} \
               --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA} \
               --region=${_REGION} \
@@ -60,14 +60,15 @@ steps:
             
             echo "$_DEPLOY_OUTPUT"
             
-            # Extract the deployed revision name from gcloud output
-            _GREEN_REV=$(echo "$_DEPLOY_OUTPUT" | grep -oP "\[${_SERVICE_NAME}-${_ENV}-[a-z0-9-]+\]" | tr -d '[]')
+            # Extract the deployed revision name from the output robustly
+            _GREEN_REV=$(echo "$_DEPLOY_OUTPUT" | grep "revision \[" | tail -n1 | sed -E 's/.*revision \[([^\]]+)\].*/\1/')
             
             if [ -z "$_GREEN_REV" ]; then
               echo "ERROR: could not extract revision name from deploy output"
               exit 1
             fi
             
+            # Save the revision for later steps
             echo "$_GREEN_REV" > green_rev.txt
             echo "Deployed revision: $_GREEN_REV"
 
