@@ -18,12 +18,30 @@ steps:
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
       - '.'
 
-  # 2. Push the tested container image to Artifact Registry
+    # 2. Push the tested container image to Artifact Registry (with retry)
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push'
+    entrypoint: bash
     args:
-      - 'push'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
+      - -c
+      - |
+        _IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}"
+        _MAX_RETRIES=5
+        _RETRY_DELAY=10
+
+        for i in $(seq 1 $_MAX_RETRIES); do
+          echo "Pushing image (attempt $i/$_MAX_RETRIES): $_IMAGE"
+          docker push "$_IMAGE" && break
+
+          echo "Push failed, retrying in ${_RETRY_DELAY}s..."
+          sleep $_RETRY_DELAY
+
+          if [ $i -eq $_MAX_RETRIES ]; then
+            echo "ERROR: Docker push failed after $_MAX_RETRIES attempts."
+            exit 1
+          fi
+        done
+
 
   # 3. Deploy the "Green" (new) version (0% traffic) and extract revision
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
