@@ -13,7 +13,7 @@ if (!url) {
             console.error('HTTP Status != 200:', res.status);
             process.exit(1);
         }
-        if (text.trim() !== 'Hello World v3 🚀') {
+        if (text.trim() !== 'Hello World v3 ') {
             console.error('Unexpected body:', text);
             process.exit(1);
         }
