@@ -1,6 +1,6 @@
 const url = process.argv[2];
 if (!url) {
-    console.error('Usage: node check_remote.js <url>');
+    console.error('Usage: node check_remote.test.js <url>');
     process.exit(2);
 }
 
