@@ -12,6 +12,10 @@ RUN npm install
 # ---- Build Stage ----
 # Copies source, runs tests, and then removes dev dependencies.
 FROM dependencies as build
+# --- NEW: Accept the build argument and use it to bust the cache ---
+ARG CACHEBUST
+RUN echo "Cache busted with commit: $CACHEBUST"
+# --- End of new code ---
 COPY . .
 RUN npm test
 RUN npm prune --production

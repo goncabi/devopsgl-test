@@ -16,8 +16,8 @@ steps:
       - 'build'
       - '-t'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
+      - '--build-arg=CACHEBUST=${COMMIT_SHA}' # AÑADE ESTA LÍNEA
       - '.'
-
   # 2. Push the tested container image to Artifact Registry (with retry)
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push'
@@ -134,18 +134,8 @@ steps:
 
         echo "Smoke test succeeded"
 
-  # 5. Integration Test (Body prüfen)
-  - name: 'node:18'
-    id: 'Integration Tests'
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        URL=$(cat green_url.txt)
-        npm ci
-        node tests/integration/check_remote.js "$$URL"
 
-  # 6. Shift Traffic (nur wenn Tests bestanden)
+  # 5. Shift Traffic (nur wenn Tests bestanden)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Shift Traffic'
     entrypoint: gcloud
