@@ -16,8 +16,8 @@ steps:
       - 'build'
       - '-t'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
+      - '--build-arg=CACHEBUST=${COMMIT_SHA}' # AÑADE ESTA LÍNEA
       - '.'
-
   # 2. Push the tested container image to Artifact Registry (with retry)
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Push'
