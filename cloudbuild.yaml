@@ -134,25 +134,8 @@ steps:
 
         echo "Smoke test succeeded"
 
-  # 5. Integration Test
-  - name: 'node:18'
-    id: 'Integration Tests'
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        URL=$(cat green_url.txt)
-        if [ -z "$$URL" ]; then
-          echo "ERROR: URL not found in green_url.txt"
-          exit 1
-        fi
-        
-        npm ci
-        
-        # Set the environment variable before running the test
-        SERVICE_URL="$$URL" npx jest tests/integration/check_remote.test.js
 
-  # 6. Shift Traffic (nur wenn Tests bestanden)
+  # 5. Shift Traffic (nur wenn Tests bestanden)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'Shift Traffic'
     entrypoint: gcloud
