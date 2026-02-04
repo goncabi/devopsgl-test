@@ -51,6 +51,7 @@ To build and run the containerized app locally:
 ```bash
 docker build -t devops-test .
 docker run -p 8080:8080 devops-test
+```
 
 ## 🗺️ Pipeline Visual Flow
 
@@ -82,3 +83,4 @@ docker run -p 8080:8080 devops-test
                    |                          (Live version stays safe)
                    v                                   v
           [ PRODUCTION LIVE ]                  [ LOGS & ALERT ]
+```
