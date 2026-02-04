@@ -51,3 +51,34 @@ To build and run the containerized app locally:
 ```bash
 docker build -t devops-test .
 docker run -p 8080:8080 devops-test
+
+## 🗺️ Pipeline Visual Flow
+
+```text
+[ Developer ] --(git push)--> [ GitHub Repo ]
+                                     |
+                                     v
+                          [ Google Cloud Build ]
+                                     |
+       +-----------------------------+-----------------------------+
+       |                             |                             |
+[ Build & Test ]          [ Push to Registry ]          [ Deploy Green ]
+(Multi-stage Docker)      (Artifact Registry)           (Cloud Run 0% Traffic)
+       |                             |                             |
+       v                             v                             v
+  (Unit Tests)                (Image Storage)              (Revision Ready?)
+       |                             |                             |
+       +-----------------------------+-----------------------------+
+                                     |
+                                     v
+                            [ Automated Smoke Test ]
+                            (cURL Health Check 200)
+                                     |
+                   +-----------------+-----------------+
+                   |                                   |
+           [ IF SUCCESS ]                      [ IF FAILURE ]
+                   |                                   |
+          (Shift 100% Traffic)                 (Aborts Pipeline)
+                   |                          (Live version stays safe)
+                   v                                   v
+          [ PRODUCTION LIVE ]                  [ LOGS & ALERT ]
